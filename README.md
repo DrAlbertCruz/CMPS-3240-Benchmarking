@@ -4,7 +4,7 @@
 
 During this lab you will:
 
-* Benchmark a processor with arbitrary subroutines that you have coded yourself,
+* Benchmark a processor with linear algebra functions,
 * Compare several machines according to the benchmarks, and
 * Code in Make and C-language.
 
@@ -15,7 +15,7 @@ This lab assumes you have read or are familiar with the following topics:
 * Chapter 1.6 (Clock rate, CPI and program performance)
 * Knowledge of linux command line interface (CLI) and `gcc`
 * Difference between execution time (also known as wall time), user time and system time
-* Linear algebra operations: dot product, matrix multiplication (book has C code, calls it `dgemm()`), and AXPY
+* Linear algebra operations such as dot product, matrix multiplication (book has C code, calls it `dgemm()`), and AXPY
 * Some experience with C language
 * C-language: Heap allocation via `malloc()` and `free()`
 * Some experience with `make`
@@ -30,11 +30,11 @@ The following is a list of requirements to complete the lab. Some labs can compl
 
 This lab requires the following software:
 
-* `gcc` version 8.3.0
+* `gcc`
 * `make`
 * `git`
 
-`odin.cs.csubak.edu` has these already installed. If you're on your own machine running Ubuntu/Debian and you're not certain if these things are installed run:
+A department server already has these installed. If you're on your own machine running Ubuntu/Debian and you're not certain if these things are installed run:
 
 ```bash
 $ sudo apt install build-essential git
@@ -52,39 +52,34 @@ For Mac and Windows see the Appendix.
 
 ## Background
 
-Processors can vary quite a bit in their clock rate, CPI and program performance. Most PC-builders often only pay attention to the clock rate of a CPU but this is the tip of the iceberg. Consider two processors with the same clock rate. There is no guarantee they complete an instruction in the same amount of cycles. This is due to:
+Processors can vary quite a bit in their clock rate, CPI and program performance. There is more to a microprocessor than its clock rate. Two manufacturers may have processors that have the same clock rate, but there is no guarantee they complete an instruction in the same amount of cycles. This is due to:
 
 * Instructions types taking a varying amount of clock cycles;
-* How manufacturers design the hardware (logic gates); and
+* How manufacturers design the hardware; and
 * A varying number and type of instructions for a program.
 
-Thus, clock rate alone is a flawed way to compare two processors. A benchmark program is often required. This defines the number and type of instructions.
-
-The execution time of a program is (instr./program)x(cycles/instr.)x(s/cycle) where (s/cycle) is the inverse of the clock rate. The (cycles/instr.) and (s/cycle) vary from microprocessor to microprocessor. It is common practice is to use a single program thus fixing the (instr./program). This is often called benchmarking. The program used is called a benchmark program. There are industry and commercial standard benchmarks:
+Clock rate alone is a flawed way to compare two processors. The execution time of a program is (instr./program)x(cycles/instr.)x(s/cycle) where (s/cycle) is the inverse of the clock rate. The (cycles/instr.) and (s/cycle) vary from microprocessor to microprocessor. It is common practice is to use a single program thus fixing the (instr./program). This is often called a **benchmark**. There are many benchmarks available:
 
 * https://www.spec.org/benchmarks.html
 * https://www.passmark.com/
 * https://www.eembc.org/
-
-Non-standard benchmarks by individuals:
-
 * Dhrystone
 * Whetsone
 
-Programs not intended as a benchmark but are often used as one:
+There are also programs not intended as a benchmark but are often used as one:
 
 * Folding@home
 * SETI@home
 * Jack the ripper
 * Prime95<sup>a</sup>
 
-The purpose of this lab is to create your own benchmark programs. Benchmark programs are costly operations that are ripe for optimization. We will revisit and improve these throughout the course. This repository has a starting framework to test on different machines. Perhaps the results will surprise you.
+The purpose of this lab is to create your own benchmark programs. Benchmark programs are costly operations that are ripe for optimization. Throughout this course we will revisit them to improve the run time. This repository has a starting framework to test on different machines. 
 
 ## Approach
 
 ### Part 0 - Verify `git`, `make` and `gcc`
 
-If you're on `odin.cs.csubak.edu` skip this step. `git`, `make` and `gcc` should be installed. The following will indicate if your machine needs these things to be installed. Open a terminal, change the directory to your intended working directoy and download this repository:
+If you're on a department server, skip this step. `git`, `make` and `gcc` should be installed. The following will indicate if your machine needs these things to be installed. Open a terminal, change the directory to your intended working directoy and download this repository:
 
 ```base
 $ git clone https://github.com/DrAlbertCruz/CMPS-3240-Benchmarking.git
@@ -108,15 +103,17 @@ The goal of this lab is to implement three benchmark programs:
 
 ```c
 void iaxpy( int length, int a, int *X, int *Y, int *Result );
-float fdot( int length, float *X, float *Y );
+float sscal( int length, float *X, float *Y );
+float sdot( int length, float *X, float *Y );
 void dgemm ( int length, double *X, double *Y, double *Result );
 ```
 
-`iaxpy()` has been provided. Feel free to read these operations using whatever resources at your disposal. These operations are costly array operations:
+`iaxpy()` has been provided. Feel free to read these operations using whatever resources at your disposal, such as ChatGPT. These are costly array operations:
 
 * `iaxpy` - an operation called *A times X plus Y* abbreviated as *AXPY*. The prefix `i` indicates integers. Element-wise multiplication of scalar A times `x[i]` and add `y[i]`. It is a linear cost operation. This tests integer multiplication and addition operations of a processor.<sup>c</sup>
-* `fdot` - an operation called dot product. The prefix `f` indicates single-precision floating point values (`float`). Element-wise multiplication of `x[i]` and `y[i]`, and cumulatively sum the result. It is linear cost. `fdot()` tests the floating point multiplication speed of a processor.
-* `dgemm` - an operation *Generic Matrix Multiplication* (DGEMM). `d` indicates double-precision floating point. Carries out a matrix multiplication. Tests floating point operations. It also tests the cache with many re-references of the same index. This is a polynomial n^2 cost operation.
+* `sscal` - an operation called "single scalar." The prefix `s` indicates single-precision floating point values (`float`). Element-wise multiplication of `x[i]` and `y[i]`, and cumulatively sum the result. It is linear cost. `sscal()` tests the floating point multiplication speed of a processor.
+* `sdot` - an operation called dot product. The prefix `s` indicates single-precision floating point values (`float`). Element-wise multiplication of `x[i]` and `y[i]`, and cumulatively sum the result. It is linear cost. It also tests the floating point multiplication speed of a processor.
+* `dgemm` - an operation *Generic Matrix Multiplication* (DGEMM). `d` indicates double-precision floating point. Carries out a matrix multiplication. Tests floating point operations. It also tests the cache with due to re-references of the same index. This is a polynomial n^3 cost operation.
 
 Study `text_iaxpy.c` before proceeding. When you have a general understanding proceed. The idea is to create test programs for each of these operations, and `test_iaxpy.c` is one example. Each benchmark should contain the following:
 
@@ -163,7 +160,7 @@ free( Result );
 
 We also want to use `malloc()` because there are limits to the size of an array declared in the traditional way via `TYPE[N]`--due to system limitations of the size of an array that can be allocated on the stack, and we will definitely be exceeding this limit. Before proceeding to the next section, study `test_iaxpy.c`. Do the following:
 
-* Create a test program for `fdot` from `test_iaxpy.c`, and make appropriate targets for it in the makefile.
+* Create a test program for `sdot` from `test_iaxpy.c`, and make appropriate targets for it in the makefile.
 * Repeat for `dgemm`. Note that when allocating the arrays for `dgemm` that it is n^2 so your need to modify your allocation as follows: `(double *) malloc( N * N * sizeof(double) )`. *This code is given as an example in the textbook.*
 
 ### Part 2 - Benchmarking
@@ -192,7 +189,7 @@ user    0m0.887s
 sys 0m0.476s
 ```
 
-Recall from the text that real (wall) time includes the time that was spent by the operating system allocating memory and doing I/O. We want to focus on the user time. So, for `iaxpy` my Dell Latitude E5470 has an average of ~0.9 seconds. You should run this benchmark operation on `odin.cs.csubak.edu` for each of the three operations. *This means you must make benchmark programs for `fdot` and `dgemm` because they are not provided with the repo.* You should get faster results because I have a slower processor. You want to run the experiment many times because factors out of your control may skew you measurement. For example, there may be too many people running the same benchmark at that exact moment.
+Recall from the text that real (wall) time includes the time that was spent by the operating system allocating memory and doing I/O. We want to focus on the user time. So, for `iaxpy` my Dell Latitude E5470 has an average of ~0.9 seconds. You should run this benchmark operation on `odin.cs.csubak.edu` for each of the three operations. *This means you must make benchmark programs for `sdot` and `dgemm` because they are not provided with the repo.* You should get faster results because I have a slower processor. You want to run the experiment many times because factors out of your control may skew you measurement. For example, there may be too many people running the same benchmark at that exact moment.
 To determine what processor you are running via the command line execute:
 
 ```shell
@@ -210,7 +207,7 @@ cache size	: 6144KB KB
 You will get something different on `odin.cs.csubak.edu`, `sleipnir.cs.csubak.edu` and the other machines you intend to benchmark. Carry out the a benchmark of the three operations:
 
 * `iaxpy` - For N = 200000000
-* `fdot` - For N = 200000000
+* `sdot` - For N = 200000000
 * `dgemm` - For N = 1024. Do not try to run this for N = 200000000 the operation is too large to run even on `odin.cs.csubak.edu`.
 
 each on at least one more computer (other than odin). Some suggestions: the local machine you're using to ssh to `odin.cs.csubak.edu` on (if linux), `sleipnir.cs.csubak.edu` (if you have a login for that), your macbook, etc.
@@ -231,7 +228,7 @@ For check off, do the following:
 * Show your version of the DGEMM test program to the instructor
 * Aggregate your results into a table, and show your results to the instructor. It should look something like:
 
-| Operation | `iaxpy` | `fdot` | `dgemm` |
+| Operation | `iaxpy` | `sdot` | `dgemm` |
 | :--- | :--- | :--- | :--- |
 | Albert's Dell Latitude E5470 w/ Intel Core i5-6440HQ | 0.771 | 0.790 | 4.110 |
 | Albert's 2014 Macbook Pro w/ Intel Core i7-5557U | 0.925 | 0.836 | 12.776 |
